@@ -4,6 +4,7 @@
 *
 *   Copyright (c) 2007-2009 Ilya O. Levin, http://www.literatecode.com
 *   Other contributors: Hal Finney
+*   AES128 support (c) 2013 Paul Sokolovsky
 *
 *   Permission to use, copy, modify, and distribute this software for any
 *   purpose with or without fee is hereby granted, provided that the above
@@ -21,14 +22,29 @@
 #define uint8_t  unsigned char
 #endif
 
+// Undefine for AES256
+#define AES128
+
+#ifdef AES128
+#define KEY_SIZE 16
+#define N_ROUNDS 10
+#define DEC_KEY_ROUNDS 11
+#define DEC_RCON 0x6c
+#else
+#define KEY_SIZE 32
+#define N_ROUNDS 14
+#define DEC_KEY_ROUNDS 8
+#define DEC_RCON 0x80
+#endif
+
 #ifdef __cplusplus
 extern "C" { 
 #endif
 
     typedef struct {
-        uint8_t key[32]; 
-        uint8_t enckey[32]; 
-        uint8_t deckey[32];
+        uint8_t key[KEY_SIZE]; 
+        uint8_t enckey[KEY_SIZE]; 
+        uint8_t deckey[KEY_SIZE];
     } aes256_context; 
 
 

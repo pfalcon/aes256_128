@@ -4,6 +4,7 @@
 *
 *   Copyright (c) 2007-2009 Ilya O. Levin, http://www.literatecode.com
 *   Other contributors: Hal Finney
+*   AES128 support (c) 2013 Paul Sokolovsky
 *
 *   Permission to use, copy, modify, and distribute this software for any
 *   purpose with or without fee is hereby granted, provided that the above
@@ -253,14 +254,15 @@ void aes_expandEncKey(uint8_t *k, uint8_t *rc)
 {
     register uint8_t i;
 
-    k[0] ^= rj_sbox(k[29]) ^ (*rc);
-    k[1] ^= rj_sbox(k[30]);
-    k[2] ^= rj_sbox(k[31]);
-    k[3] ^= rj_sbox(k[28]);
+    k[0] ^= rj_sbox(k[29 - (32 - KEY_SIZE)]) ^ (*rc);
+    k[1] ^= rj_sbox(k[30 - (32 - KEY_SIZE)]);
+    k[2] ^= rj_sbox(k[31 - (32 - KEY_SIZE)]);
+    k[3] ^= rj_sbox(k[28 - (32 - KEY_SIZE)]);
     *rc = F( *rc);
 
     for(i = 4; i < 16; i += 4)  k[i] ^= k[i-4],   k[i+1] ^= k[i-3],
         k[i+2] ^= k[i-2], k[i+3] ^= k[i-1];
+#ifndef AES128
     k[16] ^= rj_sbox(k[12]);
     k[17] ^= rj_sbox(k[13]);
     k[18] ^= rj_sbox(k[14]);
@@ -268,6 +270,7 @@ void aes_expandEncKey(uint8_t *k, uint8_t *rc)
 
     for(i = 20; i < 32; i += 4) k[i] ^= k[i-4],   k[i+1] ^= k[i-3],
         k[i+2] ^= k[i-2], k[i+3] ^= k[i-1];
+#endif
 
 } /* aes_expandEncKey */
 
@@ -276,6 +279,7 @@ void aes_expandDecKey(uint8_t *k, uint8_t *rc)
 {
     uint8_t i;
 
+#ifndef AES128
     for(i = 28; i > 16; i -= 4) k[i+0] ^= k[i-4], k[i+1] ^= k[i-3], 
         k[i+2] ^= k[i-2], k[i+3] ^= k[i-1];
 
@@ -283,15 +287,16 @@ void aes_expandDecKey(uint8_t *k, uint8_t *rc)
     k[17] ^= rj_sbox(k[13]);
     k[18] ^= rj_sbox(k[14]);
     k[19] ^= rj_sbox(k[15]);
+#endif
 
     for(i = 12; i > 0; i -= 4)  k[i+0] ^= k[i-4], k[i+1] ^= k[i-3],
         k[i+2] ^= k[i-2], k[i+3] ^= k[i-1];
 
     *rc = FD(*rc);
-    k[0] ^= rj_sbox(k[29]) ^ (*rc);
-    k[1] ^= rj_sbox(k[30]);
-    k[2] ^= rj_sbox(k[31]);
-    k[3] ^= rj_sbox(k[28]);
+    k[0] ^= rj_sbox(k[29 - (32 - KEY_SIZE)]) ^ (*rc);
+    k[1] ^= rj_sbox(k[30 - (32 - KEY_SIZE)]);
+    k[2] ^= rj_sbox(k[31 - (32 - KEY_SIZE)]);
+    k[3] ^= rj_sbox(k[28 - (32 - KEY_SIZE)]);
 } /* aes_expandDecKey */
 
 
@@ -302,7 +307,7 @@ void aes256_init(aes256_context *ctx, uint8_t *k)
     register uint8_t i;
 
     for (i = 0; i < sizeof(ctx->key); i++) ctx->enckey[i] = ctx->deckey[i] = k[i];
-    for (i = 8;--i;) aes_expandEncKey(ctx->deckey, &rcon);
+    for (i = DEC_KEY_ROUNDS;--i;) aes_expandEncKey(ctx->deckey, &rcon);
 } /* aes256_init */
 
 /* -------------------------------------------------------------------------- */
@@ -320,13 +325,16 @@ void aes256_encrypt_ecb(aes256_context *ctx, uint8_t *buf)
     uint8_t i, rcon;
 
     aes_addRoundKey_cpy(buf, ctx->enckey, ctx->key);
-    for(i = 1, rcon = 1; i < 14; ++i)
+    for(i = 1, rcon = 1; i < N_ROUNDS; ++i)
     {
         aes_subBytes(buf);
         aes_shiftRows(buf);
         aes_mixColumns(buf);
+#ifndef AES128
         if( i & 1 ) aes_addRoundKey( buf, &ctx->key[16]);
-        else aes_expandEncKey(ctx->key, &rcon), aes_addRoundKey(buf, ctx->key);
+        else
+#endif
+            aes_expandEncKey(ctx->key, &rcon), aes_addRoundKey(buf, ctx->key);
     }
     aes_subBytes(buf);
     aes_shiftRows(buf);
@@ -343,17 +351,28 @@ void aes256_decrypt_ecb(aes256_context *ctx, uint8_t *buf)
     aes_shiftRows_inv(buf);
     aes_subBytes_inv(buf);
 
-    for (i = 14, rcon = 0x80; --i;)
+    for (i = N_ROUNDS, rcon = DEC_RCON; --i;)
     {
+#ifndef AES128
         if( ( i & 1 ) )           
+#endif
         {
             aes_expandDecKey(ctx->key, &rcon);
+#ifndef AES128
             aes_addRoundKey(buf, &ctx->key[16]);
+#else
+            aes_addRoundKey(buf, ctx->key);
+#endif
         }
+#ifndef AES128
         else aes_addRoundKey(buf, ctx->key);
+#endif
         aes_mixColumns_inv(buf);
         aes_shiftRows_inv(buf);
         aes_subBytes_inv(buf);
     }
+#ifdef AES128
+    aes_expandDecKey(ctx->key, &rcon);
+#endif
     aes_addRoundKey( buf, ctx->key); 
 } /* aes256_decrypt */

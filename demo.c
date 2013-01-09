@@ -43,7 +43,11 @@ int main (int argc, char *argv[])
     aes256_encrypt_ecb(&ctx, buf);
 
     DUMP("enc: ", i, buf, sizeof(buf));
+#ifdef AES128
+    printf("tst: 69 c4 e0 d8 6a 7b 04 30 d8 cd b7 80 70 b4 c5 5a\n");
+#else
     printf("tst: 8e a2 b7 ca 51 67 45 bf ea fc 49 90 4b 49 60 89\n");
+#endif
 
     aes256_init(&ctx, key);
     aes256_decrypt_ecb(&ctx, buf);
